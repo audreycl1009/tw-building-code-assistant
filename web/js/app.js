@@ -5,7 +5,7 @@ const $ = (id) => document.getElementById(id);
 const KEY_STORE = "bca.apiKey";
 const REGION_STORE = "bca.region";
 
-const state = { manifest: null, prompts: null, national: null, regionLaws: {}, engine: null, region: "", running: null };
+const state = { manifest: null, prompts: null, national: null, regionLaws: {}, engine: null, region: "", regionRequest: 0, running: null };
 
 /* ---------- small helpers ---------- */
 
@@ -85,7 +85,9 @@ function fillRegions() {
 async function applyRegion(region) {
   if (region && !state.manifest.counties.includes(region)) region = "";
   const info = state.manifest.regions[region];
+  const request = ++state.regionRequest; // a slower, older request must not override a newer choice
   if (info && !state.regionLaws[region]) state.regionLaws[region] = await getJSON("data/" + info.file);
+  if (request !== state.regionRequest) return;
   state.region = region;
   $("region").value = region;
   localStorage.setItem(REGION_STORE, region);
