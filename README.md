@@ -1,5 +1,7 @@
 # 建築法規助理 building-code-assistant
 
+**線上使用：<https://audreycl1009.github.io/tw-building-code-assistant/>**（打開網頁、貼上你自己的 Anthropic API key 就能問，不用安裝）
+
 用口語問台灣的建築法規，它會找出相關條文、整理答案並標出「哪部法規第幾條」。
 **本機執行**：法規下載後存在你的電腦，AI 用你自己的 Claude 帳號（或自己的 API key），不需要任何共用伺服器。
 
@@ -22,7 +24,7 @@
 需要 Python 3.9 以上，沒有其他套件。
 
 ```bash
-git clone <this repo> && cd building-code-assistant
+git clone https://github.com/audreycl1009/tw-building-code-assistant.git && cd tw-building-code-assistant
 python3 -m pip install -e .        # 之後可直接用 bca 指令；不安裝也能用 python3 -m bca
 ```
 
