@@ -12,8 +12,10 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 
 def cmd_update(args):
     cfg = config.load()
-    entries = registry.all_entries(cfg.get("region"))
-    print(f"更新 {len(entries)} 部法規（地區：{cfg.get('region') or '只有全國法規'}）…")
+    every = getattr(args, "all", False)
+    entries = registry.every_entry() if every else registry.all_entries(cfg.get("region"))
+    scope = "所有已收錄地區" if every else (cfg.get("region") or "只有全國法規")
+    print(f"更新 {len(entries)} 部法規（地區：{scope}）…")
     nat, err1 = fetch.fetch_moj([e for e in entries if "kind" in e])
     loc, err2 = fetch.fetch_local([e for e in entries if "source" in e])
     for law in nat + loc:
@@ -101,6 +103,10 @@ def cmd_export_web(args):
             json.dump([_compact(l) for l in laws], f, ensure_ascii=False, separators=(",", ":"))
         return laws
 
+    missing = [e["name"] for e in registry.every_entry() if not store.versions(e["id"])]
+    if missing:
+        print("缺少這些法規，請先執行 bca update --all：\n  " + "\n  ".join(missing))
+        return 1
     national = dump("national.json", registry.NATIONAL)
     regions = {}
     for region, entries in registry.LOCAL.items():
@@ -155,15 +161,28 @@ JUDGE = """你在批改建築法規助理的答案。比對「助理答案」與
 助理答案：{ans}"""
 
 
+def judge_passed(verdict):
+    """The first line says PASS or FAIL, possibly wrapped in markdown such as **PASS**."""
+    lines = verdict.strip().splitlines()
+    return bool(lines) and "PASS" in lines[0].upper() and "FAIL" not in lines[0].upper()
+
+
 def cmd_eval(args):
     from .assistant import Assistant
-    a = Assistant()
     path = args.file or os.path.join(HERE, "eval_questions.json")
     questions = json.load(open(path, encoding="utf-8"))["questions"]
-    if args.region_only:
-        questions = [q for q in questions if q.get("needs_region") in (None, a.cfg.get("region"))]
+    if args.only:
+        questions = [q for q in questions if q["id"] in args.only.split(",")]
+    assistants = {}
+
+    def assistant_for(region):
+        if region not in assistants:
+            assistants[region] = Assistant(region)
+        return assistants[region]
+
     hit = passed = 0
     for q in questions:
+        a = assistant_for(q.get("needs_region"))
         res = a.ask(q["question"])
         found = {(d["law_id"], d["article"]) for d in res["hits"]}
         ok = all((e["law"], e["article"]) in found for e in q["expected"])
@@ -172,7 +191,7 @@ def cmd_eval(args):
         if args.judge:
             verdict = llm.complete(JUDGE.format(q=q["question"], ref=q["expected_answer"], ans=res["answer"]),
                                    "smart", backend=a.backend)
-            good = verdict.strip().upper().startswith("PASS")
+            good = judge_passed(verdict)
             passed += good
             line += f" 答案{'✅' if good else '❌'} {verdict.splitlines()[-1] if verdict.count(chr(10)) else ''}"
         print(f"{line}  {q['question']}")
@@ -189,7 +208,9 @@ def main(argv=None):
     s.add_argument("--backend", choices=["auto", "claude", "api"])
     s.add_argument("--yes", action="store_true", help="不互動，只用全國法規（或搭配 --region）")
     s.set_defaults(fn=cmd_setup)
-    sub.add_parser("update", help="重新下載，抓修正後的新版").set_defaults(fn=cmd_update)
+    s = sub.add_parser("update", help="重新下載，抓修正後的新版")
+    s.add_argument("--all", action="store_true", help="連同所有已收錄地區（輸出網頁資料前要用）")
+    s.set_defaults(fn=cmd_update)
     sub.add_parser("laws", help="列出已載入的法規與版本").set_defaults(fn=cmd_laws)
     s = sub.add_parser("pin", help="固定某部法規用舊版本")
     s.add_argument("law_id")
@@ -204,7 +225,7 @@ def main(argv=None):
     s = sub.add_parser("eval", help="跑評測題")
     s.add_argument("--judge", action="store_true", help="另外請 Claude 批改答案內容")
     s.add_argument("--file")
-    s.add_argument("--region-only", action="store_true", help="略過需要其他地區資料的題目")
+    s.add_argument("--only", help="只跑這些題號，例如 Q7,Q10")
     s.set_defaults(fn=cmd_eval)
     args = p.parse_args(argv)
     try:

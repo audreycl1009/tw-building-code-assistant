@@ -91,10 +91,10 @@ async function applyRegion(region) {
   localStorage.setItem(REGION_STORE, region);
 
   const local = info ? state.regionLaws[region] : [];
-  state.engine = new Engine([...state.national, ...local], state.prompts, region);
+  state.engine = new Engine([...state.national, ...local], state.prompts, region, local.map((l) => l.id));
   $("region-note").textContent = !region
     ? "選擇地區後會一併載入該縣市的建築自治條例。"
-    : info ? `已載入${region}的建築自治條例。` : `${region}的自治條例尚未收錄，目前只用全國法規；地方規定請另向當地主管機關確認。`;
+    : info ? `已載入${region}的 ${info.laws.length} 部自治條例。` : `${region}的自治條例尚未收錄，目前只用全國法規；地方規定請另向當地主管機關確認。`;
   renderLaws(local.map((l) => l.id));
 }
 
