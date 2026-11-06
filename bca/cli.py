@@ -1,7 +1,8 @@
-"""Command line: bca setup | update | laws | pin | ask | eval"""
+"""Command line: bca setup | update | laws | pin | ask | eval | export-web"""
 import argparse
 import json
 import os
+import shutil
 import sys
 
 from . import config, fetch, llm, registry, store
@@ -81,10 +82,47 @@ def cmd_pin(args):
     print("已更新。")
 
 
+def _compact(law):
+    return {"id": law["id"], "name": law["name"], "amended": law["amended"], "url": law["source_url"],
+            "articles": [[a["article"], a["chapter"].strip(), a["section"].strip(), a["text"]] for a in law["articles"]]}
+
+
+def cmd_export_web(args):
+    """Write the static data files the web page loads (web/data/*.json) from the local store."""
+    import datetime
+    out = os.path.abspath(args.out)
+    os.makedirs(out, exist_ok=True)
+    cfg = config.load()
+    pins = cfg.get("pins", {})
+
+    def dump(name, entries):
+        laws = store.load_all(entries, pins)
+        with open(os.path.join(out, name), "w", encoding="utf-8") as f:
+            json.dump([_compact(l) for l in laws], f, ensure_ascii=False, separators=(",", ":"))
+        return laws
+
+    national = dump("national.json", registry.NATIONAL)
+    regions = {}
+    for region, entries in registry.LOCAL.items():
+        laws = dump(f"region-{region}.json", entries)
+        if laws:
+            regions[region] = {"file": f"region-{region}.json", "laws": [l["name"] for l in laws]}
+    shutil.copyfile(os.path.join(HERE, "prompts.json"), os.path.join(out, "prompts.json"))
+    manifest = {"generated": datetime.date.today().isoformat(), "national": "national.json",
+                "counties": registry.COUNTIES, "regions": regions}
+    with open(os.path.join(out, "manifest.json"), "w", encoding="utf-8") as f:
+        json.dump(manifest, f, ensure_ascii=False, indent=1)
+    print(f"輸出到 {out}：全國 {len(national)} 部，地區 {', '.join(regions) or '無'}")
+    return 0
+
+
 def _show(assistant, question):
     res = assistant.ask(question)
     print(f"\n搜尋詞：{res['terms']}")
-    print(f"參考條文：{', '.join(d['law'][-6:] + ' ' + d['article'] for d in res['hits'])}\n")
+    by_law = {}
+    for d in res["hits"]:
+        by_law.setdefault(d["law"], []).append(d["article"])
+    print("參考條文：" + "；".join(f"{law} {'、'.join(arts)}" for law, arts in by_law.items()) + "\n")
     print(res["answer"])
     print("\n" + assistant.footer(res) + "\n")
     return res
@@ -157,6 +195,9 @@ def main(argv=None):
     s.add_argument("law_id")
     s.add_argument("version", help="例如 20250513，或 latest")
     s.set_defaults(fn=cmd_pin)
+    s = sub.add_parser("export-web", help="輸出網頁用的靜態資料")
+    s.add_argument("--out", default=os.path.join(os.path.dirname(HERE), "web", "data"))
+    s.set_defaults(fn=cmd_export_web)
     s = sub.add_parser("ask", help="問問題（不給問題就進入對話）")
     s.add_argument("question", nargs="*")
     s.set_defaults(fn=cmd_ask)

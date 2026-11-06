@@ -16,4 +16,4 @@ bca = "bca.cli:main"
 packages = ["bca"]
 
 [tool.setuptools.package-data]
-bca = ["eval_questions.json"]
+bca = ["eval_questions.json", "prompts.json"]

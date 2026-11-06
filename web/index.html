@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src 'self' https://api.anthropic.com; img-src 'self' data:; base-uri 'none'; form-action 'none'">
+  <meta name="referrer" content="no-referrer">
+  <meta name="color-scheme" content="light dark">
+  <title>建築法規助理</title>
+  <meta name="description" content="用口語詢問台灣建築法規，答案附上法規名稱與條號。開源、純前端，使用你自己的 Anthropic API key。">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%231d3a8a'/%3E%3Cpath d='M7 25V14l9-7 9 7v11M5 25h22M13 25v-6h6v6' fill='none' stroke='%23fff' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&family=Noto+Serif+TC:wght@500;700&family=JetBrains+Mono:wght@500&display=swap">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <a class="skip" href="#q">跳到提問框</a>
+
+  <div class="shell">
+    <aside class="side" aria-label="設定與法規">
+      <div class="brand">
+        <svg class="mark" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="7"/><path d="M7 25V14l9-7 9 7v11M5 25h22M13 25v-6h6v6"/></svg>
+        <div>
+          <p class="brand-name">建築法規助理</p>
+          <p class="brand-sub">Taiwan Building Code Assistant</p>
+        </div>
+      </div>
+
+      <section class="panel" aria-labelledby="h-conn">
+        <h2 id="h-conn">連線設定</h2>
+
+        <label for="key">Anthropic API key</label>
+        <div class="field">
+          <input id="key" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="sk-ant-…" aria-describedby="key-hint key-error">
+          <button type="button" id="key-toggle" class="icon-btn" aria-label="顯示金鑰" aria-pressed="false">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg>
+          </button>
+        </div>
+        <p id="key-error" class="error" role="alert" hidden></p>
+
+        <label class="check"><input type="checkbox" id="remember"> 記住在這個瀏覽器</label>
+        <p id="key-hint" class="hint">金鑰只存在你的瀏覽器裡，只會送往 <code>api.anthropic.com</code>，不經過任何其他伺服器。
+          還沒有？到 <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener noreferrer">Anthropic Console</a> 申請（按用量付費；Claude 聊天訂閱不能當作 API key）。
+          <button type="button" id="key-clear" class="link-btn" hidden>清除已存的金鑰</button></p>
+
+        <label for="region">地區</label>
+        <select id="region"></select>
+        <p id="region-note" class="hint"></p>
+      </section>
+
+      <section class="panel" aria-labelledby="h-laws">
+        <details id="laws-box" open>
+          <summary><h2 id="h-laws">已載入的法規 <span id="laws-count" class="count"></span></h2></summary>
+          <ul id="laws" class="laws"></ul>
+          <p id="data-date" class="hint"></p>
+        </details>
+      </section>
+    </aside>
+
+    <main class="main">
+      <header class="hero">
+        <p class="eyebrow">BUILDING CODE · TAIWAN</p>
+        <h1>用口語問，<br>得到有出處的答案。</h1>
+        <p class="lede">同時查全國法規與地方自治條例。每個結論都標示是哪部法規的第幾條；
+          條文找不到、或要看沒載入的法規時，會直接說明，不猜。</p>
+      </header>
+
+      <form id="ask" autocomplete="off">
+        <label for="q" class="sr">你的問題</label>
+        <textarea id="q" rows="3" maxlength="500" placeholder="例如：陽台欄杆要做多高？" required></textarea>
+        <div class="ask-row">
+          <ul class="examples" aria-label="範例問題">
+            <li><button type="button" class="chip">陽台欄杆要做多高？</button></li>
+            <li><button type="button" class="chip">廁所的天花板最低可以做多低？</button></li>
+            <li><button type="button" class="chip">房子沒有使用執照可以接水接電嗎？</button></li>
+            <li><button type="button" class="chip">把隔間牆打掉重做要申請室內裝修嗎？</button></li>
+          </ul>
+          <button type="submit" id="go" class="primary">提問</button>
+        </div>
+      </form>
+
+      <p id="boot" class="boot" role="status">載入法規中…</p>
+
+      <section id="result" class="result" hidden aria-live="polite">
+        <ol class="steps" id="steps">
+          <li data-step="rewrite"><span class="dot"></span>改寫問題</li>
+          <li data-step="search"><span class="dot"></span>搜尋條文</li>
+          <li data-step="answer"><span class="dot"></span>撰寫答案</li>
+        </ol>
+
+        <p id="fail" class="error box" role="alert" hidden></p>
+
+        <article id="answer" class="answer" hidden></article>
+
+        <section id="refs-box" class="refs" hidden>
+          <h2>參考條文 <span id="refs-count" class="count"></span></h2>
+          <p id="refs-hint" class="hint"></p>
+          <ul id="refs"></ul>
+        </section>
+
+        <p id="versions" class="versions" hidden></p>
+      </section>
+
+      <footer class="foot">
+        <p>這是輔助查詢工具，不是法律意見；實際認定以主管建築機關為準。附表與附圖未收錄，也沒有函釋與各都市計畫書的分區管制。</p>
+        <p>開源專案，純前端，無追蹤。法規來源：<a href="https://law.moj.gov.tw/" target="_blank" rel="noopener noreferrer">全國法規資料庫</a>、各縣市政府法規系統。</p>
+      </footer>
+    </main>
+  </div>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>

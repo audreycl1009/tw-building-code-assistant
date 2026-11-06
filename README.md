@@ -17,7 +17,7 @@
 - 每個答案附上所參考法規的**修正日期**，看得出資料新不新。
 - 可以更新到最新修正版，也可以把某部法規**固定在舊版本**（例如查舊案）。
 
-## 安裝
+## 指令列版安裝
 
 需要 Python 3.9 以上，沒有其他套件。
 
@@ -48,6 +48,33 @@ bca pin D0070115 20260223      # 把設計施工編固定在某個舊版；bca p
 
 資料放在 `~/.building-code-assistant/`（用環境變數 `BCA_HOME` 改位置）。
 
+## 網頁版（純前端、開源）
+
+`web/` 是一個**不需要後端**的靜態網頁：法規資料跟著網頁一起發佈，搜尋在你的瀏覽器裡執行，
+AI 呼叫則是瀏覽器**直接**送到 `api.anthropic.com`，用的是你在頁面上輸入的 API key。
+
+- API key 預設只存在這個分頁（關掉就沒了）；勾「記住在這個瀏覽器」才會存進 localStorage，也可以一鍵清除。
+- 網頁有內容安全政策（CSP），只允許連到自己和 `api.anthropic.com`；沒有追蹤、沒有第三方腳本（只載入 Google Fonts 字型）。
+- 提示詞與同義詞表與指令列版共用同一份（`bca/prompts.json`），兩邊行為一致。
+
+**本機試用**（瀏覽器不能直接開檔案，要起一個靜態伺服器）：
+
+```bash
+python3 -m http.server -d web      # 然後開 http://localhost:8000
+```
+
+**更新網頁用的資料**（法規修正後）：
+
+```bash
+bca update && bca export-web       # 重新抓法規，輸出到 web/data/
+```
+
+**部署到 GitHub Pages**：把專案推到 GitHub，到 Settings → Pages → Source 選「GitHub Actions」，
+`.github/workflows/pages.yml` 會在每次推到 `main` 時發佈 `web/`。
+
+> 把自己的 API key 輸入任何網頁都有風險：請只在你信任的網址（你自己部署的、或審過原始碼的）使用，
+> 並在 Anthropic Console 為這組 key 設定用量上限。
+
 ## 地區與版本
 
 - **地區**：目前自治條例只收錄**苗栗縣**（苗栗縣建築管理自治條例，來源：苗栗縣政府法規系統）。
@@ -69,7 +96,7 @@ bca pin D0070115 20260223      # 把設計施工編固定在某個舊版；bca p
 目前結果（2026-11-06）：**檢索 9/9**；答案批改約 **7–8/9**，每次跑會差 1 題左右——模型回答與批改措辭都有隨機性
 （例如同一題有時被批「結論不夠明確」），所以請看趨勢，不要把單次結果當定論。
 
-`python3 -m unittest discover -s tests` 跑不用網路、不用 AI 的單元測試。
+`python3 -m unittest discover -s tests`（Python）與 `node --test web/test/search.test.mjs`（網頁搜尋）跑不用網路、不用 AI 的單元測試。
 
 ## 已知限制
 
