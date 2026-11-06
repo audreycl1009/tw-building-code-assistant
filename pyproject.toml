@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "building-code-assistant"
+version = "0.1.0"
+description = "台灣建築法規助理：本機執行、自帶 Claude 帳號或 API key"
+requires-python = ">=3.9"
+dependencies = []
+
+[project.scripts]
+bca = "bca.cli:main"
+
+[tool.setuptools]
+packages = ["bca"]
+
+[tool.setuptools.package-data]
+bca = ["eval_questions.json"]
